@@ -17,7 +17,7 @@ app.use(cors());
 app.use(express.json());
 app.use(fileUpload({
   useTempFiles: true,
-  // limits: {fileSize: 50 *2024 *1024}
+  
 }))
 
 //cloudinary config
@@ -46,6 +46,7 @@ const client = new MongoClient(uri, {
 async function run() {
   try {
     const imageCollection =client.db('suncraft').collection('suncraftImage')
+    const homeVideoCollection =client.db('suncraft').collection('homeVideo')
     const logoCollection =client.db('suncraft').collection('addedlogo')
     const customerLogoCollection =client.db('suncraft').collection('addedCustomerLogo')
     const tableDataCollection =client.db('suncraft').collection('allTableData')
@@ -67,6 +68,11 @@ async function run() {
     const getImage = await imageCollection.find(query).toArray();
     res.send(getImage)
 })
+
+
+ 
+  
+
 
 //logo add & get
 
@@ -172,6 +178,85 @@ app.get('/getAboutData', async(req,res)=>{
 const query = {}
 const getAboutData = await aboutCollection.find(query).toArray();
 res.send(getAboutData)
+})
+
+
+ //Home video
+  
+//  app.post('/homeVideo', async(req,res) =>{
+//   const imgVideo = req.files.video;
+//   const result = await cloudinary.uploader.upload(imgVideo.tempFilePath,{
+//     public_id: `${Date.now()}`,
+//     resource_type:"auto",
+//     folder: "videos"
+//   });
+// 
+//   // this is cloudinary response
+//   console.log(result,'=====cloudinary============');
+//   // res.send(result)
+// 
+// 
+// 
+//      // Save the uploaded file metadata to MongoDB
+//      const media = {
+//       publicId: result.public_id,
+//       format: result.format,
+//       url: result.secure_url,
+//       type: result.resource_type,
+//       // Set other metadata fields as needed
+//     };
+// 
+//     const saveHomeVideo=await homeVideoCollection.insertOne(media)
+// 
+//     console.log(saveHomeVideo,'=====saveHomeVideo============');
+// 
+//       // Return the saved media metadata as the response
+//       res.send(saveHomeVideo)
+// })
+
+
+app.post('/homeVideo', async(req, res) => {
+  try {
+    if (!req.files || !req.files.video) {
+      throw new Error('No video file found');
+    }
+
+    const imgVideo = req.files.video;
+    const result = await cloudinary.uploader.upload(imgVideo.tempFilePath, {
+      public_id: `${Date.now()}`,
+      resource_type: "auto",
+      folder: "videos"
+    });
+
+    // Log the Cloudinary response
+    console.log(result, '=====cloudinary============');
+
+    // Save the uploaded file metadata to MongoDB
+    const media = {
+      publicId: result.public_id,
+      format: result.format,
+      url: result.secure_url,
+      type: result.resource_type,
+      // Set other metadata fields as needed
+    };
+
+    const saveHomeVideo = await homeVideoCollection.insertOne(media);
+
+    console.log(saveHomeVideo, '=====saveHomeVideo============');
+
+    // Return the saved media metadata as the response
+    res.send(saveHomeVideo);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ error: error.message });
+  }
+});
+
+
+app.get('/getHomeVideo', async(req,res)=>{
+const query = {}
+const getHomeVideo = await homeVideoCollection.find(query).toArray();
+res.send(getHomeVideo)
 })
 
 
