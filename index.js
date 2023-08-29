@@ -2,7 +2,8 @@ const express=require('express');
 const cors = require('cors');
 const cloudinary=require('cloudinary').v2
 const fileUpload=require("express-fileupload")
-
+const jwt=require('jsonwebtoken')
+const { ObjectId } = require('mongodb');
 
 
 const { MongoClient, ServerApiVersion } = require('mongodb');
@@ -30,9 +31,8 @@ cloudinary.config({
 
 
 
-
-
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.sa2k7xp.mongodb.net/?retryWrites=true&w=majority`;
+
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
 const client = new MongoClient(uri, {
@@ -43,8 +43,28 @@ const client = new MongoClient(uri, {
   }
 });
 
+function verifyJWT(req,res,next){
+  console.log('token inside virifyJWT', req.headers.authorization);
+  const authHeader=req.headers.authorization;
+  if(!authHeader){
+    return res.status(401).send('unauthorized access')
+  }
+  
+  const token=authHeader.split('')[1];
+
+  jwt.verify(token, process.env.ACCESS_TOKEN, function(err, decoded){
+    if(err){
+      return res.status(403).send({message: 'forbidded acess'})
+    }
+    req.decoded=decoded;
+    next();
+
+  })
+}
+
 async function run() {
   try {
+   
     const imageCollection =client.db('suncraft').collection('suncraftImage')
     const homeVideoCollection =client.db('suncraft').collection('homeVideo')
     const logoCollection =client.db('suncraft').collection('addedlogo')
@@ -53,6 +73,62 @@ async function run() {
     const aboutDataCollection=client.db('suncraft').collection('about')
     const aboutCollection=client.db('suncraft').collection('aboutData')
     const consultingDataCollection=client.db('suncraft').collection('consulting')
+    const videoCall=client.db('suncraft').collection('schedule')
+    const usersCollection =client.db('suncraft').collection('users')
+
+
+
+
+//user collection
+
+app.post('/users', async(req,res) =>{
+  const user = req.body
+  console.log(user)
+  const result = await usersCollection.insertOne(user);
+  res.send(result)
+})
+
+app.get('/users', async(req,res) =>{
+  const query = {}
+  const users = await usersCollection.find(query).toArray();
+  res.send(users)
+})
+
+//admin email
+app.get('/users/admin/:email', async (req, res) => {
+  const email = req.params.email;
+  const query = { email }
+  const user = await usersCollection.findOne(query);
+  res.send({ isAdmin: user?.role === 'admin' });
+})
+
+
+//admin
+
+app.put('/users/admin/:id', verifyJWT,  async (req, res) => {
+  const decodedEmail = req.decoded.email;
+  const query = { email: decodedEmail };
+  const user = await usersCollection.findOne(query);
+
+  if (user?.role !== 'admin') {
+      return res.status(403).send({ message: 'forbidden access' })
+  }
+
+
+  const id = req.params.id;
+  const filter = { _id: new ObjectId(id) };
+  const options = { upsert: true };
+  const updatedDoc = {
+      $set: {
+          role: 'admin'
+      }
+  }
+  const result = await usersCollection.updateOne(filter, updatedDoc, options);
+  res.send(result);
+})
+
+
+
 
     // home image post & get
 
@@ -276,6 +352,40 @@ const result = await consultingDataCollection.find(query).toArray();
 res.send(result)
 })
 
+
+
+//video call data 
+// Replace this with your video call service integration logic
+app.post('/api/schedule', async(req, res) => {
+  const { title, time } = req.body;
+  const result = await videoCall.insertOne({
+    title: title,
+    time: time,
+  });
+  // Logic to schedule the video call using the selected service
+  // Example: Use an external video call API to schedule the call
+  
+  // Return a response indicating success
+  res.json({ result});
+});
+
+
+
+//jwt
+
+const expiration = Math.floor(Date.now() / 1000) + (6 * 30 * 24 * 60 * 60); // 6 months in seconds
+
+app.get('/jwt',async(req,res)=>{
+  const email=req.query.email;
+  const query={email:email};
+  const user=await usersCollection.findOne(query);
+  if(user){
+    const token=jwt.sign({email}, process.env.ACCESS_TOKEN,{ expiresIn: expiration })
+    
+    return res.send({accessToken:token});
+  }
+  res.status(403).send({accessToken:''})
+})
 
    }
 
